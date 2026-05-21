@@ -1,5 +1,10 @@
 # Foresportia Python SDK
 
+[![PyPI version](https://img.shields.io/pypi/v/foresportia.svg)](https://pypi.org/project/foresportia/)
+[![Python versions](https://img.shields.io/pypi/pyversions/foresportia.svg)](https://pypi.org/project/foresportia/)
+[![License](https://img.shields.io/pypi/l/foresportia.svg)](https://pypi.org/project/foresportia/)
+[![Package status](https://img.shields.io/pypi/status/foresportia.svg)](https://pypi.org/project/foresportia/)
+
 Python SDK for the Foresportia API, a private beta football analytics API that
 provides match data, model probabilities, predicted picks, confidence signals,
 and related football prediction data.
