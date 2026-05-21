@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -96,7 +96,7 @@ class ForesportiaClient:
         include: str = "upcoming",
         days: int = 31,
         limit: int = 100,
-        start: str | None = None,
+        start: Optional[str] = None,
     ) -> dict[str, Any]:
         """Return matches for a league."""
 
@@ -115,7 +115,7 @@ class ForesportiaClient:
         include: str = "all",
         days: int = 31,
         limit: int = 100,
-        start: str | None = None,
+        start: Optional[str] = None,
     ) -> dict[str, Any]:
         """Return FIFA World Cup 2026 matches."""
 
@@ -127,7 +127,7 @@ class ForesportiaClient:
             start=start,
         )
 
-    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _get(self, path: str, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         try:
             response = self._client.get(path, params=params)
         except httpx.RequestError as exc:

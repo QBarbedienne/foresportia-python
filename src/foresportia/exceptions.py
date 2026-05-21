@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 
 class ForesportiaError(Exception):
     """Base exception for all Foresportia SDK errors."""
@@ -18,9 +20,9 @@ class ForesportiaAPIError(ForesportiaError):
         self,
         message: str,
         *,
-        status_code: int | None = None,
-        response_text: str | None = None,
-        endpoint: str | None = None,
+        status_code: Optional[int] = None,
+        response_text: Optional[str] = None,
+        endpoint: Optional[str] = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
