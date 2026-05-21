@@ -6,7 +6,8 @@ confidence badges, likely scores, and match analytics.
 > **Beta warning**
 >
 > This SDK and the Foresportia API are currently in private beta. Endpoints and
-> response schemas may evolve before a stable release.
+> response schemas may evolve before a stable release. API access is currently
+> available only to selected beta users.
 
 ## Installation
 
@@ -18,10 +19,26 @@ pip install git+https://github.com/QBarbedienne/foresportia-python.git
 
 PyPI distribution will come later.
 
+## Get Beta Access
+
+The Foresportia API is currently in private beta. To request access, see the
+developer documentation:
+
+- English docs: https://www.foresportia.com/en/developers.html
+- French docs: https://www.foresportia.com/developpeurs.html
+
 ## API Key
 
-Create an API key from the Foresportia API dashboard, then expose it as an
-environment variable:
+Foresportia API access is currently granted manually during the private beta.
+The initial API key is provided after beta access is approved.
+
+Once your access is enabled, you can use the API dashboard to monitor usage,
+view active key prefixes, and generate a new key if needed:
+
+- English dashboard: https://www.foresportia.com/en/api-dashboard.html
+- French dashboard: https://www.foresportia.com/api-dashboard.html
+
+Expose your key as an environment variable:
 
 ```bash
 export FORES_API_KEY="fs_beta_your_key_here"
@@ -39,6 +56,18 @@ client = ForesportiaClient.from_env()
 
 print(client.me())
 print(client.picks_today())
+```
+
+## Check Account
+
+```python
+from foresportia import ForesportiaClient
+
+client = ForesportiaClient.from_env()
+account = client.me()
+
+print(account["client"]["email"])
+print(account["plan"])
 ```
 
 ## World Cup 2026 Example
@@ -101,11 +130,28 @@ client.league_matches("CHN", include="all", days=14, limit=10)
 client.world_cup_2026_matches(limit=10)
 ```
 
+## Current Beta Limitations
+
+- The API is currently available to selected beta users.
+- Endpoints and response schemas may evolve before a stable release.
+- The SDK currently provides a synchronous client only.
+- The SDK returns API responses as dictionaries.
+- Bookmaker odds are not included.
+
+## Language
+
+This README is written in English for the Python developer ecosystem. French
+documentation is also available:
+
+https://www.foresportia.com/developpeurs.html
+
 ## Links
 
 - Homepage: https://www.foresportia.com
-- Developer docs: https://www.foresportia.com/en/developers.html
-- API dashboard: https://www.foresportia.com/en/api-dashboard.html
+- Developer docs (EN): https://www.foresportia.com/en/developers.html
+- Developer docs (FR): https://www.foresportia.com/developpeurs.html
+- API dashboard (EN): https://www.foresportia.com/en/api-dashboard.html
+- API dashboard (FR): https://www.foresportia.com/api-dashboard.html
 
 ## Disclaimer
 
