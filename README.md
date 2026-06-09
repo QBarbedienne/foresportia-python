@@ -1,5 +1,7 @@
 # Foresportia Python SDK
 
+[Documentation](https://qbarbedienne.github.io/foresportia-python/) ·
+
 [![PyPI version](https://img.shields.io/pypi/v/foresportia.svg)](https://pypi.org/project/foresportia/)
 [![Python versions](https://img.shields.io/pypi/pyversions/foresportia.svg)](https://pypi.org/project/foresportia/)
 [![License](https://img.shields.io/pypi/l/foresportia.svg)](https://pypi.org/project/foresportia/)
