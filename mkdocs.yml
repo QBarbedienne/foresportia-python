@@ -1,0 +1,36 @@
+site_name: Foresportia Python SDK
+site_description: Python SDK for the Foresportia football forecasting API
+site_url: https://qbarbedienne.github.io/foresportia-python/
+repo_url: https://github.com/QBarbedienne/foresportia-python
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+nav:
+  - Overview: index.md
+  - Getting Started: getting-started.md
+  - Authentication: authentication.md
+  - Examples: examples.md
+  - Response Fields: response-fields.md
+  - Beta Limitations: beta-limitations.md
+  - Foresportia API: https://www.foresportia.com/en/developers.html
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - toc:
+      permalink: true

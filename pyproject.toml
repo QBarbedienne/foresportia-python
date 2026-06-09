@@ -39,7 +39,8 @@ dev = [
 
 [project.urls]
 Homepage = "https://www.foresportia.com"
-Documentation = "https://www.foresportia.com/en/developers.html"
+Documentation = "https://qbarbedienne.github.io/foresportia-python/"
+API = "https://www.foresportia.com/en/developers.html"
 Dashboard = "https://www.foresportia.com/en/api-dashboard.html"
 Repository = "https://github.com/QBarbedienne/foresportia-python"
 Issues = "https://github.com/QBarbedienne/foresportia-python/issues"

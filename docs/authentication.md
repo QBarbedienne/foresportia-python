@@ -73,5 +73,5 @@ configuration instead of hard-coding keys.
 After access is enabled, the API dashboard can be used to monitor usage, view
 active key prefixes, and generate a new key if needed:
 
-- English dashboard: https://www.foresportia.com/en/api-dashboard.html
-- French dashboard: https://www.foresportia.com/api-dashboard.html
+- [English API dashboard](https://www.foresportia.com/en/api-dashboard.html)
+- [French API dashboard](https://www.foresportia.com/api-dashboard.html)
