@@ -1,114 +1,98 @@
 # Response Fields
 
-The Foresportia API is currently in private beta. Response schemas may evolve as
-endpoints mature, coverage expands, and model metadata is refined.
+Since version 0.2.0 the typed methods (`list_leagues`, `list_league_matches`,
+`get_match`, `get_matches_bulk`, `list_today_matches`, `list_today_picks`)
+return an `ApiResponse` whose `data` holds lightweight typed models. The
+models are tolerant by design: they expose common fields with types while
+keeping the complete server payload in `.raw`, so new optional fields added by
+the API never break parsing.
 
-The SDK returns API responses as dictionaries. Application code should use
-`.get()` for fields that may be optional, missing, renamed, or unavailable for a
-specific match.
+The 0.1.0 dict-based methods (`picks_today()`, `leagues()`, ...) keep
+returning raw dictionaries.
 
-## Top-Level Shape
-
-Match-list endpoints commonly return a dictionary with a `matches` list:
+## ApiResponse
 
 ```python
-data = client.picks_today()
-matches = data.get("matches", [])
+response = client.list_leagues()
+
+response.data           # typed result
+response.payload        # full JSON payload as a dict
+response.etag           # ETag header value
+response.quota          # parsed quota headers (see below)
+response.status_code    # HTTP status
+response.not_modified   # True for 304 responses (conditional requests)
+response.data_version   # dataset release identifier when present
 ```
 
-Other metadata may be present depending on the endpoint, such as pagination,
-usage information, plan information, or request context.
+## League
 
-## Match Identifiers, Teams, League, and Date
+From `list_leagues()`:
 
-Match objects may include fields such as:
+- `code` — competition code to use in other calls (e.g. `PREMIER_LEAGUE`).
+- `name`, `country`.
+- `catalog_status`, `activity_status`, `available`, `matches_available`.
+- `raw` — the full row.
 
-- `id`, `match_id`, or another match identifier.
-- `home_team` and `away_team`.
-- `league`, `league_code`, `competition`, or related league metadata.
-- `date`, `kickoff`, `kickoff_at`, or another date/time field.
-- `status` for scheduled, live, postponed, finished, or similar match states.
+## MatchSummary
 
-Field names and availability may differ by endpoint during beta. If your code
-needs a stable internal identifier, store the value defensively and be prepared
-to handle missing IDs.
+From `list_league_matches()`, `list_today_matches()`, `list_today_picks()`:
 
-## Probabilities
+- `id` — public match identifier (`fsm:v1:<64 hex characters>`). Pass it
+  unchanged to `get_match()` and `get_matches_bulk()`.
+- `kickoff` (UTC) and `kickoff_local`.
+- `league` — a `League` with `code`, `name`, `country`.
+- `home_team`, `away_team`.
+- `probabilities` — dict with `home`, `draw`, `away`.
+- `confidence` — dict with `score` when available.
+- `likely_scores` — list of `{"score": "2-1", "probability": ...}` entries.
+- `markets` — dict with fields such as `btts`, `over_2_5`, `under_2_5`,
+  `dnb_home`, `dnb_away`, `double_chance_1x`, `double_chance_x2`,
+  `double_chance_12`.
+- `status`, `result_score`, `pick` (`{"outcome": ..., "probability": ...}`),
+  `context`.
+- `raw` — the full row.
 
-Probability fields may be represented as separate fields or grouped objects,
-depending on the endpoint and beta schema version. Common possibilities include:
+## MatchDetail
 
-- `home_probability`
-- `draw_probability`
-- `away_probability`
-- `probabilities`
-- `home_win_probability`
-- `away_win_probability`
+From `get_match()` and bulk results — the Core Analytics payload. Convenience
+properties: `id`, `kickoff`, `competition_code`, `home_team`, `away_team`,
+`probabilities`, `forecast`, `ratings`, `statistics`, `standings`. The
+complete payload is in `.raw` (also reachable via `.get("section")`).
 
-Probabilities are model outputs, not guarantees. They may be expressed as
-fractions, percentages, or structured values depending on the endpoint. Check the
-actual response returned to your beta account before formatting or comparing
-values.
+Section availability depends on your plan; see the
+[official API reference](https://www.foresportia.com/api/docs/) for the
+payload contract.
 
-## Predicted Pick
+## BulkResult
 
-A predicted pick may be present as:
+From `get_matches_bulk()`:
 
-- `pick`
-- `predicted_pick`
-- `prediction`
-- another endpoint-specific field
+- `results` — list of `MatchDetail`, in request order (missing IDs skipped).
+- `errors` — list of `BulkItemError` with `match_id` and `code`
+  (e.g. `match_not_found`). Errors are reported, never hidden.
+- `data_version`, `source`, `raw`.
 
-Treat the pick as the model-preferred outcome for the match data returned by the
-API. It is not betting advice and should not be presented as a guaranteed
-result.
+## Quota
 
-## Confidence and Stability Indicators
+Parsed from response headers; every field is `None` when the header is absent:
 
-Some responses may include confidence, stability, or quality indicators. These
-fields may appear as:
-
-- `confidence`
-- `confidence_label`
-- `confidence_score`
-- `stability`
-- `stability_label`
-- `stability_score`
-
-These indicators are intended to help interpret model output cautiously. They do
-not guarantee accuracy and should not be converted into performance claims
-without independent validation.
-
-## Likely Scores
-
-Likely score information may be available for some matches and absent for
-others. Possible fields include:
-
-- `likely_score`
-- `likely_scores`
-- `predicted_score`
-- `scoreline`
-
-Likely scores should be treated as model analytics, not final-score forecasts or
-guaranteed outcomes.
+- `limit`, `remaining`, `reset_at` — `X-RateLimit-*`.
+- `units_remaining_hour`, `units_remaining_day` — `X-Quota-Units-Remaining-*`.
+- `match_rows_remaining_day` — `X-Match-Rows-Remaining-Day`.
+- `retry_after` — `Retry-After` (on 429).
 
 ## Optional Fields and Missing Values
 
-During beta, a field may be missing because:
-
-- The endpoint does not currently include it.
-- The match is outside available coverage.
-- The model output is not available yet.
-- The match status changed.
-- The beta schema changed.
-
-Use `.get()` and sensible fallbacks:
+A field may be missing because the endpoint does not include it, the match is
+outside available coverage, or the model output is not published yet. Typed
+model fields default to `None` (or empty dicts) in that case, and unknown new
+fields remain accessible through `.raw`:
 
 ```python
-pick = match.get("pick") or match.get("predicted_pick") or "n/a"
-confidence = match.get("confidence") or match.get("confidence_label") or "n/a"
+match = response.data[0]
+probability = match.probabilities.get("home")   # None-safe
+extra = match.raw.get("some_future_field")
 ```
 
-Avoid assuming that every match has probabilities, confidence labels, likely
-scores, or identical field names across endpoints until the stable API schema is
-published.
+Avoid assuming that every match has probabilities, confidence, or likely
+scores. Probabilities are model outputs, not guarantees.

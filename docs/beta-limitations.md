@@ -1,14 +1,13 @@
 # Beta Limitations
 
-The Foresportia Python SDK and API are currently in private beta. This document
-summarizes the practical limitations developers should account for while
-building with the SDK.
+This document summarizes the practical limitations developers should account
+for while building with the SDK.
 
 ## Access
 
-- API access is limited to selected beta users.
-- API keys are issued manually during the beta.
-- Some endpoints, leagues, or data windows may be unavailable for a given key.
+- API keys are issued through Foresportia plans; some endpoints, competitions,
+  or data windows may be unavailable for a given key.
+- `POST /v1/matches/bulk` is available on the Starter plan.
 
 ## Distribution
 
@@ -17,25 +16,27 @@ building with the SDK.
 
 ## API Stability
 
-- Response schemas may change before a stable release.
-- Fields may be added, renamed, removed, or made optional.
-- New endpoints may be introduced during beta.
-- Existing endpoints may change behavior as the API matures.
-
-Use `.get()` when reading match fields and avoid treating beta response shapes
-as a permanent contract.
+- Response schemas may still evolve. New optional fields may be added without
+  a major SDK version change.
+- The SDK's typed models are tolerant: added fields never break parsing and
+  remain accessible through `.raw`.
 
 ## SDK Scope
 
-- The SDK currently provides a synchronous client only.
-- Responses are returned as dictionaries rather than typed model classes.
-- The SDK is intentionally lightweight and does not include caching, retries,
-  pagination helpers, or async support yet.
+- The SDK provides a synchronous client only (no async client yet).
+- Retries are **disabled by default** (`max_retries=0`): a request that times
+  out client-side may still have been counted against your quota server-side,
+  so each retry can consume an extra quota unit. Enable retries explicitly
+  with `max_retries=...` and, for 429, `retry_on_rate_limit=True`.
+- ETag conditional requests are supported (`etag=` parameter, `not_modified`),
+  but the SDK does not include a disk cache.
+- The SDK parses quota headers but does not reproduce server-side quota rules
+  and cannot prevent overruns.
 
 ## Data Scope
 
-- League and match coverage may vary.
-- Refresh timing may vary during beta.
+- Competition and match coverage vary by plan and key configuration.
+- Refresh timing may vary.
 - Likely scores, confidence indicators, and probabilities may be missing for
   some matches.
 - Bookmaker odds are not included.
