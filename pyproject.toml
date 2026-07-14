@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foresportia"
-version = "0.1.0"
+version = "0.2.0"
 description = "Official Python SDK for the Foresportia API"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -35,6 +35,10 @@ dev = [
   "pytest",
   "respx",
   "twine",
+]
+ml = [
+  "numpy",
+  "scikit-learn",
 ]
 
 [project.urls]
