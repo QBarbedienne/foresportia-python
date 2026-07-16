@@ -25,7 +25,8 @@ nav:
   - Authentication: authentication.md
   - Examples: examples.md
   - Response Fields: response-fields.md
-  - Beta Limitations: beta-limitations.md
+  - Plans and Limitations: plan-limitations.md
+  - Legacy Beta Access: beta-limitations.md
   - Foresportia API: https://www.foresportia.com/en/developers.html
 
 markdown_extensions:

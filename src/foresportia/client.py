@@ -6,7 +6,7 @@ import datetime as _dt
 import os
 import re
 import time
-from typing import Any, Optional, Union
+from typing import Any, Iterator, Optional, Union
 from urllib.parse import urlsplit
 
 import httpx
@@ -181,6 +181,7 @@ class ForesportiaClient:
         start: Union[str, _dt.date, None] = None,
         days: int = 14,
         limit: int = 200,
+        cursor: Optional[str] = None,
         etag: Optional[str] = None,
     ) -> ApiResponse[list[MatchSummary]]:
         """List matches for a competition over a date window.
@@ -194,6 +195,7 @@ class ForesportiaClient:
                 Defaults server-side to today.
             days: Window size in days (1..31).
             limit: Maximum matches returned (1..500).
+            cursor: Opaque continuation cursor returned by ``response.next_cursor``.
             etag: Previous ``ETag`` for conditional requests.
         """
 
@@ -204,6 +206,8 @@ class ForesportiaClient:
         start_str = _as_date_str(start)
         if start_str is not None:
             params["start"] = start_str
+        if cursor is not None:
+            params["cursor"] = cursor
         return self._request_typed(
             "GET",
             f"/v1/leagues/{code}/matches",
@@ -211,6 +215,58 @@ class ForesportiaClient:
             etag=etag,
             parse=_parse_match_summaries,
         )
+
+    def iter_league_matches(
+        self,
+        league_code: str,
+        *,
+        include: str = "upcoming",
+        start: Union[str, _dt.date, None] = None,
+        days: int = 14,
+        limit: int = 200,
+        cursor: Optional[str] = None,
+        max_pages: Optional[int] = None,
+        max_matches: Optional[int] = None,
+    ) -> Iterator[MatchSummary]:
+        """Iterate lazily over deterministic league-match pages.
+
+        ``max_pages`` and ``max_matches`` bound client-side work. A repeated
+        server cursor raises :class:`ForesportiaAPIError` instead of looping.
+        """
+
+        if max_pages is not None and max_pages < 1:
+            raise ForesportiaValidationError("max_pages must be >= 1.")
+        if max_matches is not None and max_matches < 1:
+            raise ForesportiaValidationError("max_matches must be >= 1.")
+        next_cursor = cursor
+        seen_cursors = {cursor} if cursor is not None else set()
+        pages = 0
+        yielded = 0
+        while max_pages is None or pages < max_pages:
+            page = self.list_league_matches(
+                league_code,
+                include=include,
+                start=start,
+                days=days,
+                limit=limit,
+                cursor=next_cursor,
+            )
+            pages += 1
+            for match in page.data or []:
+                yield match
+                yielded += 1
+                if max_matches is not None and yielded >= max_matches:
+                    return
+            next_cursor = page.next_cursor
+            if not next_cursor:
+                return
+            if next_cursor in seen_cursors:
+                raise ForesportiaAPIError(
+                    "Foresportia API returned a repeated pagination cursor.",
+                    endpoint=f"/v1/leagues/{league_code}/matches",
+                    error_code="repeated_cursor",
+                )
+            seen_cursors.add(next_cursor)
 
     def get_match(
         self,
@@ -223,12 +279,12 @@ class ForesportiaClient:
 
         ``GET /v1/matches/{match_id}``
 
-        Starter match IDs look like ``fsm:v1:<64 hex chars>``. Pass IDs exactly
+        Public match IDs look like ``fsm:v1:<64 hex chars>``. Pass IDs exactly
         as returned by list endpoints; the SDK never rewrites them.
 
         Args:
             match_id: Public match identifier.
-            include: Optional comma-separated sections (Developer plan only).
+            include: Optional comma-separated sections where supported by the API.
             etag: Previous ``ETag`` for conditional requests.
         """
 
@@ -250,12 +306,13 @@ class ForesportiaClient:
         *,
         etag: Optional[str] = None,
     ) -> ApiResponse[BulkResult]:
-        """Fetch up to 100 matches in one call (Starter plan).
+        """Fetch matches in bulk (Developer: 5; Starter: 100).
 
         ``POST /v1/matches/bulk``
 
-        The ID list is validated client-side before any network call: 1 to 100
-        unique ``fsm:v1:<64 hex>`` identifiers. Request order is preserved and
+        The SDK enforces only the API-wide technical ceiling of 100 unique
+        ``fsm:v1:<64 hex>`` identifiers. The server remains authoritative for
+        the lower plan limit. Request order is preserved and
         per-ID failures are reported in ``response.data.errors`` (for example
         ``match_not_found``) without hiding the successful results.
         """
@@ -329,6 +386,11 @@ class ForesportiaClient:
         """Return details for the current API key."""
 
         return self._get("/v1/me")
+
+    def health(self) -> dict[str, Any]:
+        """Return the tolerant public ``GET /v1/health`` payload."""
+
+        return self._get("/v1/health")
 
     def usage(self) -> dict[str, Any]:
         """Return usage information for the current API key."""

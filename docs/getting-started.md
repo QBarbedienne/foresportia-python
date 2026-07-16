@@ -28,13 +28,13 @@ pip install -e ".[dev]"          # local development from a cloned checkout
 Set your API key in the `FORES_API_KEY` environment variable:
 
 ```bash
-export FORES_API_KEY="fs_beta_your_key_here"
+export FORES_API_KEY="fs_developer_your_key_here"
 ```
 
 On PowerShell:
 
 ```powershell
-$env:FORES_API_KEY = "fs_beta_your_key_here"
+$env:FORES_API_KEY = "fs_developer_your_key_here"
 ```
 
 The SDK reads this variable with `ForesportiaClient.from_env()` and sends it to
@@ -72,6 +72,25 @@ for match in response.data:
 `include` accepts `"upcoming"`, `"past"`, or `"all"`; `days` goes up to 31 and
 `limit` up to 500. `start` accepts a `YYYY-MM-DD` string or a `datetime.date`.
 
+Developer includes up to 7 days of verified history; Starter includes up to
+90. The server applies the effective entitlement and may return
+`history_window_exceeded`. `response.history_available_from` reports the
+currently populated lower bound, which can be more recent while the archive
+fills.
+
+Continue a paginated result with the opaque cursor:
+
+```python
+page = client.list_league_matches("CHN", include="past", days=7, limit=50)
+while page.next_cursor:
+    page = client.list_league_matches(
+        "CHN", include="past", days=7, limit=50, cursor=page.next_cursor
+    )
+```
+
+Or stream matches lazily with
+`client.iter_league_matches("CHN", include="past", days=7, limit=50)`.
+
 ## Match Detail and Bulk
 
 Match IDs from list endpoints look like `fsm:v1:<64 hex characters>`. Pass them
@@ -94,4 +113,5 @@ for error in bulk.data.errors:
 - Review [response-fields.md](response-fields.md) before depending on specific
   fields.
 - Try the scripts in [examples.md](examples.md).
-- Read [beta-limitations.md](beta-limitations.md) for current constraints.
+- Read [plan-limitations.md](plan-limitations.md) for Developer, Starter, and
+  legacy-access constraints.

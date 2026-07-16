@@ -96,6 +96,7 @@ class MatchSummary:
     status: Optional[str] = None
     result_score: Optional[str] = None
     pick: Optional[dict[str, Any]] = None
+    availability: Optional[dict[str, Any]] = None
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -116,6 +117,9 @@ class MatchSummary:
             status=data.get("status"),
             result_score=data.get("result_score"),
             pick=data.get("pick"),
+            availability=(
+                data.get("availability") if isinstance(data.get("availability"), dict) else None
+            ),
             raw=data,
         )
 
@@ -189,6 +193,11 @@ class MatchDetail:
     @property
     def standings(self) -> Optional[dict[str, Any]]:
         return self.raw.get("standings")
+
+    @property
+    def availability(self) -> Optional[dict[str, Any]]:
+        value = self.raw.get("availability")
+        return value if isinstance(value, dict) else None
 
     def get(self, key: str, default: Any = None) -> Any:
         """Dict-style access to the raw payload."""
@@ -270,4 +279,24 @@ class ApiResponse(Generic[T]):
     def data_version(self) -> Optional[str]:
         if isinstance(self.payload, dict):
             return self.payload.get("data_version")
+        return None
+
+    @property
+    def next_cursor(self) -> Optional[str]:
+        if isinstance(self.payload, dict):
+            value = self.payload.get("next_cursor")
+            return str(value) if value else None
+        return None
+
+    @property
+    def history_available_from(self) -> Optional[str]:
+        if isinstance(self.payload, dict):
+            value = self.payload.get("history_available_from")
+            return str(value) if value else None
+        return None
+
+    @property
+    def history_entitlement_days(self) -> Optional[int]:
+        if isinstance(self.payload, dict):
+            return _to_int(self.payload.get("history_entitlement_days"))
         return None

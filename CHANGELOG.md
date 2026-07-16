@@ -3,6 +3,33 @@
 All notable changes to the Foresportia Python SDK will be documented in this
 file.
 
+## 0.3.0 - 2026-07-16
+
+### Added
+
+- Cursor pagination support through `list_league_matches(cursor=...)` and the
+  lazy `iter_league_matches()` helper.
+- `ApiResponse.next_cursor`, `history_available_from`, and
+  `history_entitlement_days` metadata.
+- Tolerant `availability` access on `MatchSummary` and `MatchDetail`.
+- A tolerant `health()` wrapper for the stable public `GET /v1/health` route.
+- Public Developer plan documentation and `examples/developer_quickstart.py`.
+
+### Changed
+
+- Bulk documentation is now plan-aware: Developer accepts up to 5 match IDs,
+  Starter up to 100, and the server remains authoritative.
+- History documentation now distinguishes Developer (7 days) and Starter
+  (90 days), while retaining the 31-day maximum request window.
+- Beta wording now refers only to temporary legacy access.
+
+### Compatibility
+
+- No existing client method signature or return type was broken.
+- Existing beta keys remain accepted; the SDK does not infer plans from key
+  prefixes.
+- The 0.1.0 dict-based and 0.2.0 typed APIs remain available.
+
 ## 0.2.0 - 2026-07-14
 
 - Added typed methods aligned with the current public API surface:

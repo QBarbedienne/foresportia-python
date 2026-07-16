@@ -9,7 +9,7 @@ Requirements:
     pip install "foresportia[ml]"   # optional: numpy + scikit-learn
 
 Set your API key first:
-    export FORES_API_KEY="fs_beta_your_key_here"
+    export FORES_API_KEY="fs_starter_your_key_here"
 
 Foresportia provides model probabilities and analytics only. Nothing here is
 a guaranteed prediction, and this script is not betting advice.

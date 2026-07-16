@@ -6,6 +6,7 @@ import respx
 from httpx import Response
 
 from foresportia import (
+    ForesportiaAPIError,
     ForesportiaAuthenticationError,
     ForesportiaAuthorizationError,
     ForesportiaClient,
@@ -16,6 +17,9 @@ from foresportia import (
     ForesportiaServerError,
     ForesportiaTransportError,
     ForesportiaValidationError,
+    MatchDetail,
+    MatchSummary,
+    __version__,
 )
 
 BASE_URL = "https://api.foresportia.com"
@@ -52,6 +56,10 @@ MATCH_SUMMARY = {
 def _client(**kwargs):
     kwargs.setdefault("max_retries", 0)
     return ForesportiaClient(API_KEY, **kwargs)
+
+
+def test_package_version_is_030():
+    assert __version__ == "0.3.0"
 
 
 # --------------------------------------------------------------------- #
@@ -200,6 +208,81 @@ def test_list_league_matches_rejects_empty_code():
             client.list_league_matches("  ")
 
 
+@respx.mock
+def test_cursor_is_omitted_by_default_and_sent_when_provided():
+    route = respx.get(f"{BASE_URL}/v1/leagues/CHN/matches").mock(
+        return_value=Response(200, json={"matches": [], "next_cursor": "next-1"})
+    )
+    with _client() as client:
+        first = client.list_league_matches("CHN", include="past", days=7, limit=50)
+        second = client.list_league_matches("CHN", cursor=first.next_cursor)
+    assert "cursor" not in route.calls[0].request.url.params
+    assert route.calls[1].request.url.params["cursor"] == "next-1"
+    assert second.status_code == 200
+
+
+@respx.mock
+def test_iterator_follows_pages_lazily_and_stops_without_cursor():
+    route = respx.get(f"{BASE_URL}/v1/leagues/CHN/matches")
+    route.side_effect = [
+        Response(200, json={"matches": [MATCH_SUMMARY], "next_cursor": "next-1"}),
+        Response(200, json={"matches": [MATCH_SUMMARY | {"id": HEX_ID_2}], "next_cursor": None}),
+    ]
+    with _client() as client:
+        iterator = client.iter_league_matches(
+            "CHN", include="past", start="2026-07-09", days=7, limit=50
+        )
+        assert route.call_count == 0
+        matches = list(iterator)
+    assert [match.id for match in matches] == [HEX_ID_1, HEX_ID_2]
+    assert route.call_count == 2
+    assert route.calls[1].request.url.params["include"] == "past"
+    assert route.calls[1].request.url.params["start"] == "2026-07-09"
+    assert route.calls[1].request.url.params["days"] == "7"
+    assert route.calls[1].request.url.params["limit"] == "50"
+    assert route.calls[1].request.url.params["cursor"] == "next-1"
+
+
+@respx.mock
+def test_iterator_honors_max_pages_and_max_matches():
+    route = respx.get(f"{BASE_URL}/v1/leagues/CHN/matches").mock(
+        return_value=Response(
+            200,
+            json={"matches": [MATCH_SUMMARY, MATCH_SUMMARY | {"id": HEX_ID_2}], "next_cursor": "more"},
+        )
+    )
+    with _client() as client:
+        assert len(list(client.iter_league_matches("CHN", max_pages=1))) == 2
+        assert len(list(client.iter_league_matches("CHN", max_matches=1))) == 1
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_iterator_detects_repeated_cursor():
+    route = respx.get(f"{BASE_URL}/v1/leagues/CHN/matches")
+    route.side_effect = [
+        Response(200, json={"matches": [], "next_cursor": "same"}),
+        Response(200, json={"matches": [], "next_cursor": "same"}),
+    ]
+    with _client() as client:
+        with pytest.raises(ForesportiaAPIError) as exc_info:
+            list(client.iter_league_matches("CHN"))
+    assert exc_info.value.error_code == "repeated_cursor"
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_iterator_propagates_error_from_intermediate_page():
+    route = respx.get(f"{BASE_URL}/v1/leagues/CHN/matches")
+    route.side_effect = [
+        Response(200, json={"matches": [], "next_cursor": "next"}),
+        Response(500, json={"detail": "page_failed"}),
+    ]
+    with _client() as client:
+        with pytest.raises(ForesportiaServerError):
+            list(client.iter_league_matches("CHN"))
+
+
 # --------------------------------------------------------------------- #
 # Match detail and ETag / 304                                            #
 # --------------------------------------------------------------------- #
@@ -230,6 +313,28 @@ def test_get_match_returns_detail_wrapper():
     assert detail.probabilities["one_x_two"]["home"] == 0.5
     assert detail.raw == payload
     assert response.etag == '"m1"'
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ({"ratings.elo_home": "starter_required", "future.path": {"status": "available"}},
+         {"ratings.elo_home": "starter_required", "future.path": {"status": "available"}}),
+        (None, None),
+    ],
+)
+def test_match_models_tolerate_availability(value, expected):
+    payload = MATCH_SUMMARY | {"availability": value, "future_field": True}
+    summary = MatchSummary.from_dict(payload)
+    detail = MatchDetail(raw={"match": {"id": HEX_ID_1}, "availability": value, "future_field": True})
+    assert summary.availability == expected
+    assert detail.availability == expected
+    assert summary.raw["future_field"] is True and detail.raw["future_field"] is True
+
+
+def test_match_models_tolerate_absent_availability():
+    assert MatchSummary.from_dict({"id": HEX_ID_1}).availability is None
+    assert MatchDetail(raw={"match": {"id": HEX_ID_1}}).availability is None
 
 
 @respx.mock
@@ -319,6 +424,30 @@ def test_bulk_rejects_more_than_100_ids_client_side():
             client.get_matches_bulk(ids)
 
 
+@respx.mock
+@pytest.mark.parametrize("count", [5, 100])
+def test_bulk_accepts_plan_valid_and_technical_maximum_counts(count):
+    ids = ["fsm:v1:" + f"{index:064x}" for index in range(count)]
+    route = respx.post(f"{BASE_URL}/v1/matches/bulk").mock(
+        return_value=Response(200, json={"results": [], "errors": []})
+    )
+    with ForesportiaClient("fs_developer_test_key") as client:
+        client.get_matches_bulk(ids)
+    assert route.called
+
+
+@respx.mock
+def test_six_bulk_ids_are_sent_and_developer_server_limit_is_preserved():
+    ids = ["fsm:v1:" + f"{index:064x}" for index in range(6)]
+    route = respx.post(f"{BASE_URL}/v1/matches/bulk").mock(
+        return_value=Response(400, json={"detail": "bulk_limit_exceeded"})
+    )
+    with ForesportiaClient("fs_developer_test_key") as client:
+        with pytest.raises(ForesportiaValidationError) as exc_info:
+            client.get_matches_bulk(ids)
+    assert route.called and exc_info.value.error_code == "bulk_limit_exceeded"
+
+
 def test_bulk_rejects_duplicates_client_side():
     with _client() as client:
         with pytest.raises(ForesportiaValidationError) as exc_info:
@@ -395,6 +524,53 @@ def test_status_codes_map_to_typed_exceptions(status, detail, exc_type):
             client.list_leagues()
     assert exc_info.value.status_code == status
     assert exc_info.value.error_code == detail
+
+
+@respx.mock
+def test_409_preserves_status_and_unknown_business_code():
+    respx.get(f"{BASE_URL}/v1/leagues").mock(
+        return_value=Response(409, json={"detail": "future_conflict_code"})
+    )
+    with _client() as client:
+        with pytest.raises(ForesportiaAPIError) as exc_info:
+            client.list_leagues()
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.error_code == "future_conflict_code"
+
+
+@respx.mock
+def test_history_metadata_and_business_error_are_preserved():
+    route = respx.get(f"{BASE_URL}/v1/leagues/CHN/matches")
+    route.side_effect = [
+        Response(200, json={
+            "matches": [MATCH_SUMMARY], "next_cursor": None,
+            "history_entitlement_days": 7,
+            "history_available_from": "2026-07-09T00:00:00Z",
+        }),
+        Response(400, json={"detail": "history_window_exceeded"}),
+    ]
+    with _client() as client:
+        page = client.list_league_matches("CHN", include="past", days=7)
+        with pytest.raises(ForesportiaValidationError) as exc_info:
+            client.list_league_matches("CHN", include="all", days=31)
+    assert page.history_entitlement_days == 7
+    assert page.history_available_from == "2026-07-09T00:00:00Z"
+    assert page.data[-1].id == HEX_ID_1
+    assert exc_info.value.error_code == "history_window_exceeded"
+
+
+@respx.mock
+def test_health_returns_tolerant_public_payload():
+    payload = {"status": "ok", "version": "v1", "analytics": {"status": "OK"}, "future": 1}
+    respx.get(f"{BASE_URL}/v1/health").mock(return_value=Response(200, json=payload))
+    with ForesportiaClient("fs_starter_test_key") as client:
+        assert client.health() == payload
+
+
+@pytest.mark.parametrize("api_key", ["fs_developer_test_key", "fs_starter_test_key", "fs_beta_test_key"])
+def test_supported_key_namespaces_are_not_rejected_client_side(api_key):
+    with ForesportiaClient(api_key) as client:
+        assert client._client.headers["X-API-Key"] == api_key
 
 
 @respx.mock

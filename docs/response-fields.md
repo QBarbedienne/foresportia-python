@@ -22,6 +22,9 @@ response.quota          # parsed quota headers (see below)
 response.status_code    # HTTP status
 response.not_modified   # True for 304 responses (conditional requests)
 response.data_version   # dataset release identifier when present
+response.next_cursor    # opaque league-match continuation cursor
+response.history_available_from
+response.history_entitlement_days
 ```
 
 ## League
@@ -50,18 +53,35 @@ From `list_league_matches()`, `list_today_matches()`, `list_today_picks()`:
   `double_chance_12`.
 - `status`, `result_score`, `pick` (`{"outcome": ..., "probability": ...}`),
   `context`.
+- `availability` — tolerant map explaining selected fields not present in this
+  summary projection when supplied by the endpoint.
 - `raw` — the full row.
 
 ## MatchDetail
 
 From `get_match()` and bulk results — the Core Analytics payload. Convenience
 properties: `id`, `kickoff`, `competition_code`, `home_team`, `away_team`,
-`probabilities`, `forecast`, `ratings`, `statistics`, `standings`. The
+`probabilities`, `forecast`, `ratings`, `statistics`, `standings`, and
+`availability`. The
 complete payload is in `.raw` (also reachable via `.get("section")`).
 
 Section availability depends on your plan; see the
 [official API reference](https://www.foresportia.com/api/docs/) for the
 payload contract.
+
+For Developer, selected fields can be reserved for Starter without causing an
+SDK error:
+
+```python
+if match.availability:
+    elo_status = match.availability.get("ratings.elo_home")
+    if elo_status == "starter_required":
+        print("This field is available on Starter")
+```
+
+The map may be absent, `null`, partial, or contain future keys and detailed
+objects. List payloads do not promise every analytical field present in match
+detail.
 
 ## BulkResult
 

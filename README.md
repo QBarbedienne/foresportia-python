@@ -15,6 +15,14 @@ or enriching football prediction models.
 
 The SDK targets server-side Python (3.9+) with a synchronous, typed client.
 
+Public plans share the same SDK surface:
+
+- **Developer — free:** 1 competition, up to 7 days of verified history,
+  bulk requests up to 5 match IDs, and a limited analytics projection.
+- **Starter — paid:** 20 competitions, up to 90 days of verified history,
+  bulk requests up to 100 match IDs, and more complete analytics.
+- **Legacy beta:** temporary compatibility for existing keys.
+
 ## Installation
 
 ```bash
@@ -36,11 +44,11 @@ a URL, and the key never appears in `repr()`, logs, or exception messages.
 Store the key in an environment variable rather than in source code:
 
 ```bash
-export FORES_API_KEY="fs_beta_your_key_here"
+export FORES_API_KEY="fs_developer_your_key_here"
 ```
 
 ```powershell
-$env:FORES_API_KEY = "fs_beta_your_key_here"
+$env:FORES_API_KEY = "fs_developer_your_key_here"
 ```
 
 ```python
@@ -76,6 +84,9 @@ with ForesportiaClient.from_env() as client:
     for match in matches.data:
         print(match.kickoff, match.home_team, "vs", match.away_team, match.pick)
 ```
+
+The SDK also accepts Starter and legacy beta keys without inferring a plan
+from their prefix. The server remains authoritative for entitlements.
 
 Every typed method returns an `ApiResponse` with:
 
@@ -113,11 +124,12 @@ print(detail.ratings)         # ELO-style ratings
 print(detail.raw)             # complete Core Analytics payload
 ```
 
-## Bulk (Starter plan)
+## Bulk limits by plan
 
-Fetch up to 100 matches in one call. IDs are validated client-side (1–100
-unique `fsm:v1:*` IDs), order is preserved, and per-ID failures are reported
-without hiding successful results:
+Developer accepts up to 5 match IDs per request; Starter accepts up to 100.
+The SDK validates only the technical ceiling of 100. A Developer request with
+more than 5 IDs is sent and the server returns `bulk_limit_exceeded`. Order is
+preserved and per-ID failures do not hide successful results:
 
 ```python
 bulk = client.get_matches_bulk([id_1, id_2, id_3])
@@ -127,12 +139,43 @@ for error in bulk.data.errors:
     print("failed:", error.match_id, error.code)   # e.g. match_not_found
 ```
 
+## History and pagination
+
+Developer provides up to 7 days of verified history and Starter up to 90 days.
+Each request has a maximum window of 31 days. The effective archive may start
+later at `response.history_available_from` while it fills progressively.
+
+```python
+page = client.list_league_matches("CHN", include="past", days=7, limit=50)
+while True:
+    for match in page.data:
+        print(match.kickoff, match.home_team, match.away_team)
+    if not page.next_cursor:
+        break
+    page = client.list_league_matches(
+        "CHN", include="past", days=7, limit=50, cursor=page.next_cursor
+    )
+
+# Or stream rows without loading every page:
+for match in client.iter_league_matches("CHN", include="past", days=7, limit=50):
+    print(match.id)
+```
+
+The server may return `history_window_exceeded` when the requested dates fall
+outside the key's entitlement.
+
 ## Today endpoints
 
 ```python
 today = client.list_today_matches()
 picks = client.list_today_picks(limit=20)
 ```
+
+## Public health
+
+`client.health()` returns the tolerant dictionary from the stable public
+`GET /v1/health` endpoint. It reports service/data health and is not an
+entitlement or account-status check. Unknown future fields are preserved.
 
 ## Quotas and rate limits
 
@@ -195,6 +238,12 @@ except ForesportiaAPIError as exc:
 Exceptions carry `status_code`, `error_code` (the API business code such as
 `match_not_found` or `bulk_limit_exceeded`), `endpoint`, `retry_after`, and a
 `quota` snapshot when available. The API key is never included.
+
+Common business codes include `competition_not_selected`,
+`history_window_exceeded`, and `bulk_limit_exceeded`. `starter_required` is
+normally an `availability` value for a masked Developer field; if a future
+endpoint returns it as an error code, it remains available through
+`exception.error_code`. Unknown future codes use the same safe fallback.
 
 ## Retries and timeouts
 

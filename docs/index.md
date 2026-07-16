@@ -51,4 +51,5 @@ from 0.1.0 (`me()`, `picks_today()`, `leagues()`, ...) keep working unchanged.
 - [Examples](examples.md) — runnable scripts, including a machine learning
   feature-extraction example.
 - [Response Fields](response-fields.md) — typed models and payload shapes.
-- [Beta Limitations](beta-limitations.md) — current constraints.
+- [Plans and Limitations](plan-limitations.md) — Developer, Starter, and
+  legacy-access constraints.

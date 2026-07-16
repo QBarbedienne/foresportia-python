@@ -9,13 +9,13 @@ in the `FORES_API_KEY` environment variable when you use
 macOS and Linux:
 
 ```bash
-export FORES_API_KEY="fs_beta_your_key_here"
+export FORES_API_KEY="fs_developer_your_key_here"
 ```
 
 PowerShell:
 
 ```powershell
-$env:FORES_API_KEY = "fs_beta_your_key_here"
+$env:FORES_API_KEY = "fs_developer_your_key_here"
 ```
 
 Do not include a real key in source code, examples, documentation, screenshots,
@@ -26,7 +26,7 @@ or issue reports.
 The SDK sends the key with the `X-API-Key` request header:
 
 ```text
-X-API-Key: fs_beta_your_key_here
+X-API-Key: fs_developer_your_key_here
 ```
 
 The SDK never adds the key to request URLs, and the key never appears in
@@ -60,7 +60,7 @@ configuration layer:
 ```python
 from foresportia import ForesportiaClient
 
-with ForesportiaClient(api_key="fs_beta_your_key_here", timeout=10.0) as client:
+with ForesportiaClient(api_key="fs_developer_your_key_here", timeout=10.0) as client:
     data = client.usage()
 ```
 
@@ -80,6 +80,11 @@ configuration instead of hard-coding keys.
 
 All exceptions expose `status_code`, `error_code`, `endpoint`, `retry_after`,
 and a `quota` snapshot when available. The API key is never included.
+
+Developer keys are the recommended free starting point. Starter and existing
+legacy beta keys use the same header and client. The SDK intentionally accepts
+any non-empty key string and does not infer entitlements from `fs_developer_`,
+`fs_starter_`, or `fs_beta_` prefixes; the server is the authority.
 
 ## Dashboard
 

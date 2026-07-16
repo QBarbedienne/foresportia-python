@@ -6,16 +6,25 @@ Before running an example, install the SDK and set your API key:
 
 ```bash
 pip install foresportia
-export FORES_API_KEY="fs_beta_your_key_here"
+export FORES_API_KEY="fs_developer_your_key_here"
 ```
 
 On PowerShell:
 
 ```powershell
-$env:FORES_API_KEY = "fs_beta_your_key_here"
+$env:FORES_API_KEY = "fs_developer_your_key_here"
 ```
 
-## Machine Learning Feature Extraction
+## Developer Quickstart
+
+```bash
+python examples/developer_quickstart.py
+```
+
+Shows future and historical matches, lazy cursor pagination, availability
+inspection, a Starter-reserved field, and safe business/rate-limit errors.
+
+## Starter Machine Learning Feature Extraction
 
 ```bash
 pip install "foresportia[ml]"
