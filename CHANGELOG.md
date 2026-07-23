@@ -3,7 +3,7 @@
 All notable changes to the Foresportia Python SDK will be documented in this
 file.
 
-## Unreleased
+## 0.3.1 - 2026-07-23
 
 ### Added
 

@@ -58,8 +58,8 @@ def _client(**kwargs):
     return ForesportiaClient(API_KEY, **kwargs)
 
 
-def test_package_version_is_030():
-    assert __version__ == "0.3.0"
+def test_package_version_is_031():
+    assert __version__ == "0.3.1"
 
 
 # --------------------------------------------------------------------- #
