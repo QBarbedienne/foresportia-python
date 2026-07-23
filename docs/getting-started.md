@@ -91,6 +91,38 @@ while page.next_cursor:
 Or stream matches lazily with
 `client.iter_league_matches("CHN", include="past", days=7, limit=50)`.
 
+For history specifically, `list_league_history()` and `iter_league_history()`
+are thin wrappers that always send `include="past"`; they take the same
+parameters and return the same types, metadata, and errors as the methods
+above. On a returned row, `match.is_final` mirrors `status == "final"` and
+`match.predicted_outcome` exposes the published pre-match pick (`"home"`,
+`"draw"`, `"away"`, or `None`), while `match.result_score` holds the final
+score from the API.
+
+By default `days` is omitted, so the server chooses the window from the key's
+history entitlement, capped at 31 days per request. Pass `days` for an explicit
+window:
+
+```python
+with ForesportiaClient.from_env() as client:
+    # Automatically uses the available window, capped at 31 days per request.
+    history = client.list_league_history("SUE")
+
+    # The user can also pick a shorter, explicit window.
+    history = client.list_league_history("SUE", days=3)
+
+    for match in client.iter_league_history("SUE"):
+        if match.is_final:
+            print(match.home_team, match.away_team,
+                  match.result_score, match.predicted_outcome)
+```
+
+Developer currently gets 7 days of history and Starter a 90-day rolling
+entitlement, but an automatic request stays capped at 31 days.
+`iter_league_history()` paginates the requested window and does not split a
+90-day entitlement into several windows. A window may legitimately be empty, and
+the server stays the source of truth.
+
 ## Match Detail and Bulk
 
 Match IDs from list endpoints look like `fsm:v1:<64 hex characters>`. Pass them

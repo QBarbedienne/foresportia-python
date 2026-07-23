@@ -191,6 +191,18 @@ def test_list_league_matches_sends_expected_params():
 
 
 @respx.mock
+def test_list_league_matches_default_days_preserved_and_none_omits():
+    route = respx.get(f"{BASE_URL}/v1/leagues/CHN/matches").mock(
+        return_value=Response(200, json={"matches": []})
+    )
+    with _client() as client:
+        client.list_league_matches("CHN")  # public default unchanged
+        client.list_league_matches("CHN", days=None)  # opt-out of the param
+    assert route.calls[0].request.url.params["days"] == "14"
+    assert "days" not in route.calls[1].request.url.params
+
+
+@respx.mock
 def test_list_league_matches_accepts_date_object():
     import datetime
 
@@ -705,3 +717,177 @@ def test_legacy_methods_still_return_dicts():
     with _client() as client:
         assert client.me() == {"plan": "starter"}
         assert client.picks_today() == {"matches": []}
+
+
+# --------------------------------------------------------------------- #
+# League history helpers                                                 #
+# --------------------------------------------------------------------- #
+
+
+FINAL_MATCH = MATCH_SUMMARY | {
+    "id": HEX_ID_1,
+    "status": "final",
+    "result_score": "0-0",
+    "pick": {"outcome": "home", "probability": 0.5313},
+}
+
+
+@respx.mock
+def test_list_league_history_uses_past_and_forwards_params():
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches").mock(
+        return_value=Response(
+            200,
+            json={"matches": [FINAL_MATCH], "next_cursor": "next-1",
+                  "history_available_from": "2026-07-16"},
+            headers={**QUOTA_HEADERS, "ETag": '"h1"'},
+        )
+    )
+    with _client() as client:
+        response = client.list_league_history(
+            "SUE", start="2026-07-16", days=7, limit=50
+        )
+    params = route.calls[0].request.url.params
+    assert route.calls[0].request.url.path == "/v1/leagues/SUE/matches"
+    assert params["include"] == "past"
+    assert params["start"] == "2026-07-16"
+    assert params["days"] == "7"
+    assert params["limit"] == "50"
+    # Same response type and metadata as list_league_matches.
+    assert isinstance(response.data[0], MatchSummary)
+    assert response.next_cursor == "next-1"
+    assert response.history_available_from == "2026-07-16"
+    assert response.etag == '"h1"'
+    assert response.quota.limit == 15
+
+
+@respx.mock
+def test_list_league_history_omits_days_by_default():
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches").mock(
+        return_value=Response(200, json={"matches": []})
+    )
+    with _client() as client:
+        client.list_league_history("SUE")
+    params = route.calls[0].request.url.params
+    assert params["include"] == "past"
+    assert "days" not in params  # server resolves the window from entitlement
+
+
+@respx.mock
+@pytest.mark.parametrize("days", [3, 31])
+def test_list_league_history_forwards_explicit_days(days):
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches").mock(
+        return_value=Response(200, json={"matches": []})
+    )
+    with _client() as client:
+        client.list_league_history("SUE", days=days)
+    params = route.calls[0].request.url.params
+    assert params["include"] == "past"
+    assert params["days"] == str(days)
+
+
+@respx.mock
+def test_list_league_history_forwards_cursor_and_etag():
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches").mock(
+        return_value=Response(304, headers={"ETag": '"h1"'})
+    )
+    with _client() as client:
+        response = client.list_league_history("SUE", cursor="cur-1", etag='"h1"')
+    request = route.calls[0].request
+    assert request.url.params["cursor"] == "cur-1"
+    assert request.headers["If-None-Match"] == '"h1"'
+    assert response.not_modified is True
+
+
+@respx.mock
+def test_list_league_history_propagates_typed_errors():
+    respx.get(f"{BASE_URL}/v1/leagues/SUE/matches").mock(
+        return_value=Response(403, json={"detail": "history_not_entitled"})
+    )
+    with _client() as client:
+        with pytest.raises(ForesportiaAuthorizationError) as exc_info:
+            client.list_league_history("SUE", days=7)
+    assert exc_info.value.error_code == "history_not_entitled"
+
+
+@respx.mock
+def test_iter_league_history_uses_past_on_every_page_in_order():
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches")
+    route.side_effect = [
+        Response(200, json={"matches": [FINAL_MATCH], "next_cursor": "next-1"}),
+        Response(
+            200,
+            json={"matches": [FINAL_MATCH | {"id": HEX_ID_2}], "next_cursor": None},
+        ),
+    ]
+    with _client() as client:
+        matches = list(client.iter_league_history("SUE", days=7, limit=50))
+    assert [m.id for m in matches] == [HEX_ID_1, HEX_ID_2]
+    assert all(isinstance(m, MatchSummary) for m in matches)
+    assert route.call_count == 2
+    for call in route.calls:
+        assert call.request.url.params["include"] == "past"
+    assert route.calls[1].request.url.params["cursor"] == "next-1"
+
+
+@respx.mock
+def test_iter_league_history_omits_days_on_every_page_by_default():
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches")
+    route.side_effect = [
+        Response(200, json={"matches": [FINAL_MATCH], "next_cursor": "next-1"}),
+        Response(200, json={"matches": [FINAL_MATCH | {"id": HEX_ID_2}], "next_cursor": None}),
+    ]
+    with _client() as client:
+        list(client.iter_league_history("SUE"))
+    assert route.call_count == 2
+    for call in route.calls:
+        assert call.request.url.params["include"] == "past"
+        assert "days" not in call.request.url.params
+
+
+@respx.mock
+def test_iter_league_history_forwards_explicit_days_on_every_page():
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches")
+    route.side_effect = [
+        Response(200, json={"matches": [FINAL_MATCH], "next_cursor": "next-1"}),
+        Response(200, json={"matches": [FINAL_MATCH | {"id": HEX_ID_2}], "next_cursor": None}),
+    ]
+    with _client() as client:
+        list(client.iter_league_history("SUE", days=31))
+    assert route.call_count == 2
+    for call in route.calls:
+        assert call.request.url.params["days"] == "31"
+
+
+@respx.mock
+def test_iter_league_history_detects_repeated_cursor():
+    route = respx.get(f"{BASE_URL}/v1/leagues/SUE/matches")
+    route.side_effect = [
+        Response(200, json={"matches": [], "next_cursor": "same"}),
+        Response(200, json={"matches": [], "next_cursor": "same"}),
+    ]
+    with _client() as client:
+        with pytest.raises(ForesportiaAPIError) as exc_info:
+            list(client.iter_league_history("SUE"))
+    assert exc_info.value.error_code == "repeated_cursor"
+
+
+# --------------------------------------------------------------------- #
+# MatchSummary.is_final / predicted_outcome                             #
+# --------------------------------------------------------------------- #
+
+
+def test_match_summary_is_final_reflects_status():
+    final = MatchSummary.from_dict(FINAL_MATCH)
+    upcoming = MatchSummary.from_dict(MATCH_SUMMARY)
+    assert final.is_final is True
+    assert upcoming.is_final is False
+
+
+def test_match_summary_predicted_outcome():
+    assert MatchSummary.from_dict(FINAL_MATCH).predicted_outcome == "home"
+    without_pick = MatchSummary.from_dict(MATCH_SUMMARY | {"pick": None})
+    assert without_pick.predicted_outcome is None
+    incomplete = MatchSummary.from_dict(MATCH_SUMMARY | {"pick": {"probability": 0.5}})
+    assert incomplete.predicted_outcome is None
+    invalid = MatchSummary.from_dict(MATCH_SUMMARY | {"pick": {"outcome": "winner"}})
+    assert invalid.predicted_outcome is None

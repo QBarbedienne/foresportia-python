@@ -8,9 +8,12 @@ fields added by the API never break parsing.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Generic, Mapping, Optional, TypeVar
+from typing import Any, Generic, Literal, Mapping, Optional, TypeVar
 
 T = TypeVar("T")
+
+Outcome = Literal["home", "draw", "away"]
+_OUTCOMES = frozenset({"home", "draw", "away"})
 
 
 def _to_int(value: Any) -> Optional[int]:
@@ -122,6 +125,32 @@ class MatchSummary:
             ),
             raw=data,
         )
+
+    @property
+    def is_final(self) -> bool:
+        """Whether the match is finished, i.e. ``status == "final"``.
+
+        This mirrors the server ``status`` field exactly and never infers a
+        final state from the kickoff date or the presence of a score.
+        """
+
+        return self.status == "final"
+
+    @property
+    def predicted_outcome(self) -> Optional[Outcome]:
+        """The pre-match pick outcome (``"home"``, ``"draw"`` or ``"away"``).
+
+        Returns the published ``pick["outcome"]`` when present and valid, and
+        ``None`` when ``pick`` is missing, incomplete, or holds an unsupported
+        value. The pick is never recomputed from the probabilities.
+        """
+
+        if not isinstance(self.pick, dict):
+            return None
+        outcome = self.pick.get("outcome")
+        if outcome in _OUTCOMES:
+            return outcome  # type: ignore[return-value]
+        return None
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,41 @@
 All notable changes to the Foresportia Python SDK will be documented in this
 file.
 
+## Unreleased
+
+### Added
+
+- `ForesportiaClient.list_league_history()` and `iter_league_history()`: thin
+  wrappers over `list_league_matches()` / `iter_league_matches()` that always
+  request `include="past"`, with identical parameters, return types, metadata,
+  and typed errors (no new route or HTTP path).
+- `MatchSummary.is_final` (mirrors `status == "final"`) and
+  `MatchSummary.predicted_outcome` (the published `pick["outcome"]` as
+  `Literal["home", "draw", "away"] | None`, never recomputed from probabilities).
+
+### Changed
+
+- `list_league_history()` / `iter_league_history()` now default `days=None`.
+  When `days` is `None` the parameter is omitted from the request, so the
+  server resolves the window from the key's real history entitlement (capped at
+  31 days per request); an explicit `days` is forwarded unchanged. The SDK does
+  not resolve the entitlement locally and makes no extra plan-discovery call.
+- `list_league_matches()` / `iter_league_matches()` now accept `days=None` to
+  omit the parameter. Their public default value stays `14`, so existing calls
+  are unaffected.
+
+### Compatibility
+
+- No existing method signature default value or return type changed (the `days`
+  parameter type is widened to accept `None`). The package version is unchanged;
+  these additions are expected to ship in a future `0.3.1`.
+
+### Notes
+
+- The automatic-window resolution (`include=past` + `days` absent →
+  `min(history_entitlement_days, 31)`) is applied by the API server. `include=all`
+  and `include=upcoming` keep their existing default-window behaviour.
+
 ## 0.3.0 - 2026-07-16
 
 ### Added

@@ -164,6 +164,47 @@ for match in client.iter_league_matches("CHN", include="past", days=7, limit=50)
 The server may return `history_window_exceeded` when the requested dates fall
 outside the key's entitlement.
 
+### History helpers
+
+`list_league_history()` and `iter_league_history()` are thin wrappers that
+always request finished matches (`include="past"`); they take the same
+parameters, return the same types, and expose the same metadata and errors as
+the methods above. `match.is_final` mirrors the server `status == "final"` and
+`match.predicted_outcome` returns the published pre-match pick
+(`"home"`, `"draw"`, `"away"`, or `None`); `result_score` is the final score
+from the API. No live data is added.
+
+By default `days` is omitted, so the **server** picks the window from the key's
+real history entitlement, capped at 31 days per request. Pass `days` explicitly
+to choose a shorter or specific window:
+
+```python
+with ForesportiaClient.from_env() as client:
+    # Automatic window: the available history, capped at 31 days per request.
+    page = client.list_league_history("SUE")
+
+    # Or choose an explicit window.
+    page = client.list_league_history("SUE", days=3)
+
+    for match in client.iter_league_history("SUE"):
+        if not match.is_final:
+            continue
+        print(
+            match.home_team,
+            match.away_team,
+            match.result_score,
+            match.predicted_outcome,
+        )
+```
+
+Developer keys currently expose 7 days of history; Starter keys have a 90-day
+rolling entitlement, but an automatic request stays capped at 31 days.
+`iter_league_history()` paginates the requested window — it does not
+automatically split a 90-day entitlement into several windows. The SDK never
+resolves the entitlement locally and makes no extra plan-discovery call; the
+server stays authoritative and a valid window may legitimately contain no
+matches.
+
 ## Today endpoints
 
 ```python

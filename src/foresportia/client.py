@@ -179,7 +179,7 @@ class ForesportiaClient:
         *,
         include: str = "upcoming",
         start: Union[str, _dt.date, None] = None,
-        days: int = 14,
+        days: Optional[int] = 14,
         limit: int = 200,
         cursor: Optional[str] = None,
         etag: Optional[str] = None,
@@ -193,7 +193,9 @@ class ForesportiaClient:
             include: ``"upcoming"``, ``"past"``, or ``"all"``.
             start: Window start date (``YYYY-MM-DD`` or ``datetime.date``).
                 Defaults server-side to today.
-            days: Window size in days (1..31).
+            days: Window size in days (1..31). Defaults to ``14``; pass ``None``
+                to omit the parameter entirely and let the server apply its own
+                default window for the request.
             limit: Maximum matches returned (1..500).
             cursor: Opaque continuation cursor returned by ``response.next_cursor``.
             etag: Previous ``ETag`` for conditional requests.
@@ -202,7 +204,9 @@ class ForesportiaClient:
         code = str(league_code or "").strip()
         if not code:
             raise ForesportiaValidationError("league_code must be a non-empty string.")
-        params: dict[str, Any] = {"include": include, "days": days, "limit": limit}
+        params: dict[str, Any] = {"include": include, "limit": limit}
+        if days is not None:
+            params["days"] = days
         start_str = _as_date_str(start)
         if start_str is not None:
             params["start"] = start_str
@@ -222,7 +226,7 @@ class ForesportiaClient:
         *,
         include: str = "upcoming",
         start: Union[str, _dt.date, None] = None,
-        days: int = 14,
+        days: Optional[int] = 14,
         limit: int = 200,
         cursor: Optional[str] = None,
         max_pages: Optional[int] = None,
@@ -230,8 +234,10 @@ class ForesportiaClient:
     ) -> Iterator[MatchSummary]:
         """Iterate lazily over deterministic league-match pages.
 
-        ``max_pages`` and ``max_matches`` bound client-side work. A repeated
-        server cursor raises :class:`ForesportiaAPIError` instead of looping.
+        ``days`` defaults to ``14``; pass ``None`` to omit the parameter and let
+        the server apply its own default window. ``max_pages`` and
+        ``max_matches`` bound client-side work. A repeated server cursor raises
+        :class:`ForesportiaAPIError` instead of looping.
         """
 
         if max_pages is not None and max_pages < 1:
@@ -267,6 +273,94 @@ class ForesportiaClient:
                     error_code="repeated_cursor",
                 )
             seen_cursors.add(next_cursor)
+
+    def list_league_history(
+        self,
+        league_code: str,
+        *,
+        start: Union[str, _dt.date, None] = None,
+        days: Optional[int] = None,
+        limit: int = 200,
+        cursor: Optional[str] = None,
+        etag: Optional[str] = None,
+    ) -> ApiResponse[list[MatchSummary]]:
+        """List past matches for a competition (``include="past"``).
+
+        Thin wrapper around :meth:`list_league_matches` that always requests
+        finished matches. The return type, metadata (``next_cursor``,
+        ``history_available_from``, ``quota``, ``etag``, ``not_modified``) and
+        typed errors are identical to the underlying method.
+
+        When ``days`` is left as ``None`` (the default) the ``days`` parameter is
+        omitted from the request, so the **server** resolves the window from the
+        key's real history entitlement (capped at the 31-day per-request
+        maximum). The SDK never resolves the entitlement locally and issues no
+        extra discovery call: the first history request is self-contained.
+        Passing an explicit ``days`` forwards exactly that value; the server
+        keeps its own validation and error behaviour for values beyond the
+        entitlement or the 31-day maximum — nothing is silently truncated.
+
+        Entitlement stays server-side: Developer keys currently expose 7 days of
+        history and Starter keys 90 rolling days, while an automatic request is
+        capped at 31 days. A valid window may legitimately contain no matches.
+
+        Args:
+            league_code: Competition code, e.g. ``"SUE"``.
+            start: Window start date (``YYYY-MM-DD`` or ``datetime.date``).
+                Defaults server-side to the start of the available window.
+            days: Window size in days (1..31), or ``None`` (default) to let the
+                server choose the window from the entitlement.
+            limit: Maximum matches returned (1..500).
+            cursor: Opaque continuation cursor returned by ``response.next_cursor``.
+            etag: Previous ``ETag`` for conditional requests.
+        """
+
+        return self.list_league_matches(
+            league_code,
+            include="past",
+            start=start,
+            days=days,
+            limit=limit,
+            cursor=cursor,
+            etag=etag,
+        )
+
+    def iter_league_history(
+        self,
+        league_code: str,
+        *,
+        start: Union[str, _dt.date, None] = None,
+        days: Optional[int] = None,
+        limit: int = 200,
+        cursor: Optional[str] = None,
+        max_pages: Optional[int] = None,
+        max_matches: Optional[int] = None,
+    ) -> Iterator[MatchSummary]:
+        """Iterate lazily over past matches for a competition (``include="past"``).
+
+        Thin wrapper around :meth:`iter_league_matches` that always requests
+        finished matches. When ``days`` is ``None`` (the default) the parameter
+        is omitted on every page, so the server resolves the window from the
+        entitlement (capped at 31 days per request); an explicit ``days`` is
+        forwarded unchanged. Pagination, ``next_cursor`` handling, the
+        repeated-cursor guard, and propagated exceptions are unchanged; pages
+        are fetched on demand rather than buffered in memory.
+
+        This only paginates the single resolved window (at most 31 days). It
+        does not automatically walk the full 90-day Starter entitlement across
+        several windows.
+        """
+
+        yield from self.iter_league_matches(
+            league_code,
+            include="past",
+            start=start,
+            days=days,
+            limit=limit,
+            cursor=cursor,
+            max_pages=max_pages,
+            max_matches=max_matches,
+        )
 
     def get_match(
         self,
